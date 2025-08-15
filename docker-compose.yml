@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  robot_assistant:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: spark_robot_assistant
+    restart: unless-stopped
+    
+    # Mount audio devices for microphone and speaker access
+    devices:
+      - "/dev/snd:/dev/snd"
+    
+    # Mount audio system
+    volumes:
+      - /var/lib/alsa:/var/lib/alsa
+      - /var/run/alsa:/var/run/alsa
+      - /etc/alsa:/etc/alsa
+      - ./data:/app/data
+    
+    # Network access for API calls
+    network_mode: host
+    
+    # Environment variables
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-mock_openai_key}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-mock_elevenlabs_key}
+      - VOICE_ID=${VOICE_ID:-mock_voice_id}
+      - MICROPHONE_INDEX=${MICROPHONE_INDEX:-0}
+      - WAKE_WORD=${WAKE_WORD:-hey_spark}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    
+    # Privileged mode for audio access
+    privileged: true
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Labels
+    labels:
+      - "com.spark.robot.type=assistant"
+      - "com.spark.robot.version=1.0.0"
+      - "com.spark.robot.description=Witty Robot Assistant with Voice Interaction"
+
+networks:
+  default:
+    name: spark_robot_network

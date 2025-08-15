@@ -1,0 +1,87 @@
+#!/bin/bash
+# SPARK Control Script - Control SPARK from any terminal
+
+CONTROL_FILE="data/spark_control.txt"
+CONTROL_DIR="data"
+
+# Ensure control directory exists
+mkdir -p "$CONTROL_DIR"
+
+# Function to send command
+send_command() {
+    echo "$1" > "$CONTROL_FILE"
+    echo "✅ Command sent: $1"
+}
+
+# Function to check status
+check_status() {
+    if [ -f "$CONTROL_FILE" ]; then
+        content=$(cat "$CONTROL_FILE")
+        if [ -n "$content" ]; then
+            echo "📊 Current control command: $content"
+        else
+            echo "📊 No active control command"
+        fi
+    else
+        echo "📊 No control file found - SPARK may not be running"
+    fi
+    
+    # Check if SPARK is running
+    if pgrep -f "python.*main.py" > /dev/null; then
+        echo "🟢 SPARK is running"
+    else
+        echo "🔴 SPARK is not running"
+    fi
+}
+
+# Show help
+show_help() {
+    echo "🎮 SPARK Global Control Script"
+    echo "================================"
+    echo "Usage: ./spark <command>"
+    echo ""
+    echo "Commands:"
+    echo "  pause     - Pause SPARK voice processing"
+    echo "  unpause   - Resume SPARK voice processing"
+    echo "  mute      - Mute SPARK audio output"
+    echo "  unmute    - Unmute SPARK audio output"
+    echo "  reset     - Reset SPARK conversation state"
+    echo "  quit      - Gracefully shut down SPARK"
+    echo "  status    - Check SPARK's current status"
+    echo "  help      - Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  ./spark pause"
+    echo "  ./spark unpause"
+    echo "  ./spark status"
+    echo ""
+    echo "💡 You can control SPARK from ANY terminal using this script!"
+}
+
+# Main command processing
+case "${1:-help}" in
+    pause)
+        send_command "PAUSE"
+        ;;
+    unpause|resume)
+        send_command "UNPAUSE"
+        ;;
+    mute)
+        send_command "MUTE"
+        ;;
+    unmute)
+        send_command "UNMUTE"
+        ;;
+    reset)
+        send_command "RESET"
+        ;;
+    quit|exit)
+        send_command "QUIT"
+        ;;
+    status)
+        check_status
+        ;;
+    help|*)
+        show_help
+        ;;
+esac

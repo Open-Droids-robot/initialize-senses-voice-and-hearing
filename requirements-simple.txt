@@ -1,0 +1,13 @@
+# Essential packages for SPARK Robot Assistant
+langgraph>=0.2.0
+openai>=1.0.0
+elevenlabs>=0.2.0
+SpeechRecognition>=3.10.0
+pygame>=2.5.0
+pydub>=0.25.0
+numpy>=1.24.0
+python-dotenv>=1.0.0
+
+# Note: pyaudio is installed via system package manager
+# If you need to install it via pip, uncomment the line below:
+# pyaudio>=0.2.11
