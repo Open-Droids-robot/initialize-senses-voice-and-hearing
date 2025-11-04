@@ -38,10 +38,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code
 COPY src/ ./src/
-COPY data/ ./data/
 
-# Create data directory if it doesn't exist
-RUN mkdir -p data
+# Create data directory (will be mounted as volume in docker-compose)
+RUN mkdir -p ./data
 
 # Set permissions for audio devices
 RUN usermod -a -G audio root

@@ -7,7 +7,7 @@ elevenlabs>=0.2.0
 SpeechRecognition>=3.10.0
 pygame>=2.5.0
 pydub>=0.25.0
-# pyaudio>=0.2.11  # Installed via system package manager
+pyaudio>=0.2.11
 
 # Audio Processing
 numpy>=1.24.0
