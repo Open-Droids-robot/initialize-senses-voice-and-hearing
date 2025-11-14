@@ -116,7 +116,7 @@ class TerminalControl:
         """Toggle pause/unpause functionality."""
         is_paused = self.robot_state.toggle_pause()
         status = "PAUSED" if is_paused else "RESUMED"
-        print(f"[Control] System {status} *{'beep' if is_paused else 'whirr'}*")
+        print(f"[Control] System {status}")
         
         # Update activity status
         if is_paused:
@@ -126,7 +126,7 @@ class TerminalControl:
     
     def _quit_application(self):
         """Quit the application."""
-        print("[Control] Quitting application... *beep*")
+        print("[Control] Quitting application...")
         self.robot_state.cleanup()
         self.is_running = False
         
@@ -137,7 +137,7 @@ class TerminalControl:
         """Reset conversation state."""
         print("[Control] Resetting conversation... *whirr*")
         self.robot_state.reset_conversation()
-        print("[Control] Conversation reset complete *beep*")
+        print("[Control] Conversation reset complete")
     
     def _show_status(self):
         """Show current system status."""
@@ -160,7 +160,7 @@ class TerminalControl:
         """Toggle mute/unmute functionality."""
         is_muted = self.robot_state.toggle_mute()
         status = "MUTED" if is_muted else "UNMUTED"
-        print(f"[Control] Audio {status} *{'click' if is_muted else 'beep'}*")
+        print(f"[Control] Audio {status}")
     
     def _show_help(self):
         """Show help information."""
@@ -190,7 +190,7 @@ class TerminalControl:
         conversations = self.robot_state.get_recent_conversations(5)
         
         if not conversations:
-            print("[Control] No recent conversations found *beep*")
+            print("[Control] No recent conversations found")
             return
         
         print("\n=== RECENT CONVERSATIONS ===")
@@ -216,15 +216,15 @@ class TerminalControl:
         
         # Battery status indicators
         if battery > 80:
-            print("Status: Fully charged *beep*")
+            print("Status: Fully charged")
         elif battery > 60:
             print("Status: Good charge *whirr*")
         elif battery > 40:
             print("Status: Moderate charge *click*")
         elif battery > 20:
-            print("Status: Low charge *beep* *beep*")
+            print("Status: Low charge")
         else:
-            print("Status: Critical charge *beep* *beep* *beep*")
+            print("Status: Critical charge")
         
         # Estimated runtime (simulated)
         if battery > 0:
@@ -239,7 +239,7 @@ class TerminalControl:
         errors = stats['recent_errors']
         
         if not errors:
-            print("[Control] No recent errors found *beep*")
+            print("[Control] No recent errors found")
             return
         
         print("\n=== RECENT ERRORS ===")

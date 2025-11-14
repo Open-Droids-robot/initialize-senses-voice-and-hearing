@@ -37,6 +37,7 @@ class Config:
     
     # Development Mode
     DEV_MODE = os.getenv('DEV_MODE', 'true').lower() == 'true'
+    ENABLE_WEB_SEARCH = os.getenv('ENABLE_WEB_SEARCH', 'false').lower() == 'true'
     
     @classmethod
     def validate(cls):

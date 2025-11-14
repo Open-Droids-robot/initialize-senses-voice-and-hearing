@@ -171,6 +171,17 @@ class RobotState:
         """Get a user preference."""
         return self.user_preferences.get(key, default)
     
+    def get_recent_conversation(self, max_turns: int = 5) -> str:
+        """Return formatted recent conversation turns for context."""
+        if not self.conversation_history:
+            return ""
+        turns = self.conversation_history[-max_turns:]
+        lines: List[str] = []
+        for entry in turns:
+            lines.append(f"User: {entry.user_input}")
+            lines.append(f"Assistant: {entry.robot_response}")
+        return "\n".join(lines)
+    
     def register_voice_handler(self, voice_handler):
         """Register the voice handler for pause/resume coordination."""
         self.voice_handler = voice_handler

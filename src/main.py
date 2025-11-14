@@ -38,7 +38,7 @@ class RobotAssistant:
     def initialize(self):
         """Initialize all components of the robot assistant."""
         try:
-            print("🤖 Initializing SPARK - The Witty Robot Assistant...")
+            print("🤖 Bringing systems online...")
             
             # Validate configuration
             config_issues = Config.validate()
@@ -51,6 +51,7 @@ class RobotAssistant:
             # Initialize components
             print("📝 Initializing robot persona...")
             self.persona = RobotPersona()
+            print(f"🤖 {self.persona.get_system_prompt('initializing')}")
             
             print("💾 Initializing state management...")
             self.robot_state = RobotState(max_history=Config.MAX_CONVERSATION_HISTORY)
@@ -67,7 +68,7 @@ class RobotAssistant:
             # Set up callbacks
             self._setup_callbacks()
             
-            print("✅ Initialization complete! *beep* *whirr*")
+            print("✅ Initialization complete!")
             return True
             
         except Exception as e:
@@ -97,7 +98,7 @@ class RobotAssistant:
             return
         
         try:
-            print("\n🚀 Starting SPARK Robot Assistant...")
+            print(f"\n🚀 {self.persona.get_system_prompt('starting', 'Starting assistant...')}")
             print("=" * 50)
             
             # Start terminal control
@@ -209,12 +210,7 @@ class RobotAssistant:
         """Test voice synthesis."""
         print("\n🔊 Testing voice synthesis...")
         
-        test_texts = [
-            "Hello, I am SPARK, your robot assistant!",
-            "This is a test of my voice capabilities.",
-            "Beep boop, whirr click!",
-            "I hope you can hear me clearly."
-        ]
+        test_texts = self.persona.get_voice_test_phrases()
         
         for text in test_texts:
             print(f"Speaking: {text}")
@@ -256,7 +252,7 @@ class RobotAssistant:
             
             self.is_running = False
             
-            print("✅ Cleanup complete. Goodbye! *beep* *whirr*")
+            print(f"{self.persona.get_system_prompt('cleanup', 'Cleanup complete.')}")
             
         except Exception as e:
             print(f"⚠️  Error during cleanup: {e}")

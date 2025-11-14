@@ -57,7 +57,7 @@ class ConversationGraph:
             self.robot_state.update_activity(ActivityStatus.LISTENING)
             self.robot_state.update_emotional_state(EmotionalState.NEUTRAL)
             
-            print(f"[{self.persona.name}] Listening... *beep*")
+            print(f"[{self.persona.name}] Listening...")
             
             # Don't modify user_input, just pass it through
             should_continue = True
@@ -84,7 +84,7 @@ class ConversationGraph:
             self.robot_state.update_activity(ActivityStatus.THINKING)
             self.robot_state.update_emotional_state(EmotionalState.HELPFUL)
             
-            print(f"[{self.persona.name}] Processing request... *whirr*")
+            print(f"[{self.persona.name}] Processing request...")
             
             user_input = state.get("user_input", "")
             robot_response = ""
@@ -95,7 +95,7 @@ class ConversationGraph:
             if user_input:
                 # Check if we should use real API or fallback responses
                 if self._should_use_real_api():
-                    print(f"[{self.persona.name}] Using AI brain for response... *whirr*")
+                    print(f"[{self.persona.name}] Using AI brain for response...")
                     robot_response, processing_time = await self._generate_real_response(user_input, context)
                     print(f"[{self.persona.name}] AI Response generated: '{robot_response}'")
                 else:
@@ -104,7 +104,7 @@ class ConversationGraph:
                         robot_response = self.persona.get_response("greeting")
                     elif "how are you" in user_input.lower():
                         mood = self.persona.get_mood()
-                        robot_response = f"I'm feeling quite {mood} today! *beep*"
+                        robot_response = f"I'm feeling quite {mood} today."
                     elif "help" in user_input.lower():
                         robot_response = self.persona.get_response("helpful")
                     elif "bye" in user_input.lower():
@@ -117,7 +117,7 @@ class ConversationGraph:
                 
                 context = f"User asked about: {user_input[:50]}..."
             else:
-                robot_response = self.persona.get_response("confused")
+                    robot_response = self.persona.get_response("confused")
                 
         except Exception as e:
             error = f"Error in process node: {e}"
@@ -145,12 +145,6 @@ class ConversationGraph:
             # Debug: Check what we received
             print(f"[{self.persona.name}] Respond node - State keys: {list(state.keys())}")
             print(f"[{self.persona.name}] Respond node - robot_response: '{state.get('robot_response', 'NOT_FOUND')}'")
-            
-            if state.get("robot_response") and not state["robot_response"].endswith(('*', '!')):
-                import random
-                sounds = ['*beep*', '*whirr*', '*click*']
-                if not any(sound in state["robot_response"] for sound in sounds):
-                    state["robot_response"] += f" {random.choice(sounds)}"
             
             print(f"[{self.persona.name}] Response ready: {state['robot_response']}")
             
@@ -238,7 +232,7 @@ class ConversationGraph:
             self.robot_state.update_activity(ActivityStatus.IDLE)
             
             if self.robot_state.is_paused:
-                print(f"[{self.persona.name}] System paused. Press SPACE to resume. *beep*")
+                print(f"[{self.persona.name}] System paused. Press SPACE to resume.")
                 while self.robot_state.is_paused:
                     await asyncio.sleep(0.1)
             
@@ -258,8 +252,8 @@ class ConversationGraph:
             self.robot_state.update_emotional_state(EmotionalState.CONFUSED)
             
             if state.get("error"):
-                print(f"[{self.persona.name}] Error occurred: {state['error']} *beep*")
-                error_response = f"I encountered an error: {state['error']}. *whirr* Let me try to recover..."
+                print(f"[{self.persona.name}] Error occurred: {state['error']}")
+                error_response = f"I encountered an error: {state['error']}. Let me try to recover..."
                 print(f"🤖 {error_response}")
                 
                 self.robot_state.add_conversation_entry(
@@ -297,18 +291,18 @@ class ConversationGraph:
         input_lower = user_input.lower()
         
         if any(word in input_lower for word in ["weather", "temperature"]):
-            return "I'd check the weather for you, but my meteorological sensors are offline. *beep*"
+            return "I'd check the weather for you, but my meteorological sensors are offline."
         
         elif any(word in input_lower for word in ["time", "clock"]):
             from datetime import datetime
             current_time = datetime.now().strftime("%H:%M")
-            return f"The current time is {current_time}. *click*"
+            return f"The current time is {current_time}."
         
         elif any(word in input_lower for word in ["joke", "funny"]):
-            return "Why did the robot go to the doctor? Because it had a virus! *beep*"
+            return "Why did the robot go to the doctor? Because it had a virus!"
         
         else:
-            return f"I'm not sure how to respond to '{user_input}'. *beep* My circuits are tangled. *whirr*"
+            return f"I'm not sure how to respond to '{user_input}'. Let's regroup and try again."
     
     async def _generate_real_response(self, user_input: str, context: str = "") -> tuple[str, float]:
         """Generate a response using OpenAI API."""
@@ -321,33 +315,61 @@ class ConversationGraph:
             # Check if OpenAI API key is configured
             if not Config.OPENAI_API_KEY or Config.OPENAI_API_KEY == "your_openai_api_key_here":
                 print(f"[{self.persona.name}] No valid OpenAI API key found")
-                return "I'd love to give you a smart response, but my AI brain isn't connected yet. *beep* Please check your OpenAI API key configuration.", 0.1
+                return "I'd love to give you a smart response, but my AI brain isn't connected yet. Please check your OpenAI API key configuration.", 0.1
             
             print(f"[{self.persona.name}] OpenAI API key found, configuring client...")
             
             # Configure OpenAI client
             client = openai.OpenAI(api_key=Config.OPENAI_API_KEY)
             
-            # Build the prompt with SPARK's personality
+            # Build the prompt with persona and recent conversation
             system_prompt = self.persona.get_personality_prompt()
-            user_prompt = f"User: {user_input}\nContext: {context}\n\nSPARK, respond in character as a witty, tech-savvy robot with a touch of sarcasm. Keep responses SHORT and CONCISE (under 50 words max) and include robot sounds like *beep* or *whirr*. Be witty but brief!"
+            history_snippet = ""
+            if hasattr(self.robot_state, "get_recent_conversation"):
+                history_snippet = self.robot_state.get_recent_conversation(max_turns=6)
+            if not history_snippet:
+                history_snippet = "No previous conversation. This is the first turn."
+            
+            user_prompt = (
+                f"Recent conversation:\n{history_snippet}\n\n"
+                f"Current user message: {user_input}\nContext: {context}\n\n"
+                f"Respond as {self.persona.name}, following the mission described in the system message. "
+                "Keep responses under 70 words, only discuss Open Droids/open source if the user asks, "
+                "and do NOT prefix the response with your name or any speaker label."
+            )
             
             print(f"[{self.persona.name}] Making OpenAI API call...")
             
-            # Make API call
-            response = client.chat.completions.create(
-                model=Config.OPENAI_MODEL,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                max_tokens=80,  # Reduced for shorter responses
-                temperature=0.8
-            )
+            use_web = getattr(Config, "ENABLE_WEB_SEARCH", False)
             
-            # Extract and return response
-            ai_response = response.choices[0].message.content.strip()
-            processing_time = response.usage.total_tokens / 1000  # Rough time estimate
+            if use_web:
+                response = client.responses.create(
+                    model=Config.OPENAI_MODEL,
+                    input=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    tools=[{"type": "web_search", "name": "web"}],
+                    tool_choice="auto",
+                    temperature=0.8,
+                    max_output_tokens=200,
+                )
+                ai_response = self._extract_response_text(response)
+                token_usage = getattr(response, "usage", None)
+                total_tokens = getattr(token_usage, "total_tokens", 0) if token_usage else 0
+                processing_time = total_tokens / 1000 if total_tokens else 0.3
+            else:
+                response = client.chat.completions.create(
+                    model=Config.OPENAI_MODEL,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    max_tokens=120,
+                    temperature=0.8
+                )
+                ai_response = response.choices[0].message.content.strip()
+                processing_time = response.usage.total_tokens / 1000  # Rough time estimate
             
             print(f"[{self.persona.name}] OpenAI API response received: '{ai_response}'")
             
@@ -355,7 +377,32 @@ class ConversationGraph:
             
         except Exception as e:
             print(f"OpenAI API error: {e}")
-            return f"I encountered an error with my AI brain: {str(e)[:50]}... *whirr* Falling back to basic responses.", 0.1
+            return f"I encountered an error with my AI brain: {str(e)[:50]}... Falling back to basic responses.", 0.1
+    
+    def _extract_response_text(self, response) -> str:
+        """Normalize text output from the Responses API."""
+        try:
+            outputs = getattr(response, "output", None)
+            if outputs:
+                chunks: List[str] = []
+                for item in outputs:
+                    content_list = item.get("content") if isinstance(item, dict) else getattr(item, "content", [])
+                    if not content_list:
+                        continue
+                    for content in content_list:
+                        if isinstance(content, dict):
+                            if content.get("type") == "output_text":
+                                chunks.append(content.get("text", ""))
+                        else:
+                            if getattr(content, "type", "") == "output_text":
+                                chunks.append(getattr(content, "text", ""))
+                if chunks:
+                    return " ".join(chunks).strip()
+            if hasattr(response, "output_text") and response.output_text:
+                return response.output_text.strip()
+        except Exception as e:
+            print(f"[{self.persona.name}] Warning: could not parse Responses output: {e}")
+        return ""
     
     def _should_use_real_api(self) -> bool:
         """Check if we should use real API or mock responses."""
@@ -382,7 +429,7 @@ class ConversationGraph:
                 "should_continue": True
             }
             
-            print(f"[{self.persona.name}] Starting conversation workflow... *beep*")
+            print(f"[{self.persona.name}] Starting conversation workflow...")
             print(f"[{self.persona.name}] Initial state: {state_dict}")
             
             # Run the graph without checkpoint configuration for now
@@ -401,4 +448,4 @@ class ConversationGraph:
     def stop_conversation(self):
         """Stop the conversation workflow."""
         self.robot_state.update_activity(ActivityStatus.IDLE)
-        print(f"[{self.persona.name}] Conversation workflow stopped. *beep*")
+        print(f"[{self.persona.name}] Conversation workflow stopped.")

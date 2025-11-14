@@ -20,6 +20,8 @@ class VoiceHandler:
         self.audio_thread = None
         self.callback = None
         self.robot_state = None  # Reference to robot state for pause checking
+        self._playback_active = False
+        self._playback_end_time = 0.0
         
         # Audio settings
         self.sample_rate = Config.SAMPLE_RATE
@@ -42,36 +44,129 @@ class VoiceHandler:
             
             # Try to find available audio devices
             input_devices = []
+            pulse_device = None
+            default_device = None
+            
             for i in range(self.audio.get_device_count()):
                 try:
                     info = self.audio.get_device_info_by_index(i)
                     if info['maxInputChannels'] > 0:
-                        input_devices.append((i, info['name']))
+                        device_name = info['name'].lower()
+                        device_entry = (i, info['name'])
+                        input_devices.append(device_entry)
                         print(f"[Voice] Found input device {i}: {info['name']}")
+                        
+                        # Track PulseAudio and default devices for fallback
+                        if 'pulse' in device_name and pulse_device is None:
+                            pulse_device = device_entry
+                        if 'default' in device_name and default_device is None:
+                            default_device = device_entry
                 except:
                     pass
             
-            if input_devices:
-                # Use the first available input device
-                device_index = input_devices[0][0]
-                print(f"[Voice] Using input device: {input_devices[0][1]} (index {device_index})")
-                self.microphone = sr.Microphone(device_index=device_index)
-            else:
-                # Fallback to default microphone
-                print("[Voice] No specific input devices found, using default")
-                self.microphone = sr.Microphone()
+            # Device selection priority:
+            # 1. Config.MICROPHONE_INDEX if explicitly set and valid
+            # 2. PulseAudio device (best for Jetson/containerized environments)
+            # 3. Default device
+            # 4. First available device
             
-            # Adjust for ambient noise
-            with self.microphone as source:
-                self.recognizer.adjust_for_ambient_noise(source, duration=1)
+            device_index = None
+            device_name = None
+            
+            # Check if MICROPHONE_INDEX is configured and valid
+            if Config.MICROPHONE_INDEX is not None:
+                print(f"[Voice] 🔧 MICROPHONE_INDEX is configured in .env: {Config.MICROPHONE_INDEX}")
+                print(f"[Voice] 📋 Available input devices: {[(idx, name) for idx, name in input_devices]}")
+                
+                # Verify the specified device index exists and has input channels
+                found_config_device = False
+                for dev_idx, dev_name in input_devices:
+                    if dev_idx == Config.MICROPHONE_INDEX:
+                        # Double-check the device is actually accessible
+                        try:
+                            test_info = self.audio.get_device_info_by_index(Config.MICROPHONE_INDEX)
+                            if test_info['maxInputChannels'] > 0:
+                                device_index = Config.MICROPHONE_INDEX
+                                device_name = dev_name
+                                found_config_device = True
+                                print(f"[Voice] ✅ Found and validated configured microphone index: {Config.MICROPHONE_INDEX} ({device_name})")
+                                print(f"[Voice]    Device details: {test_info['maxInputChannels']} input channels, {int(test_info['defaultSampleRate'])} Hz")
+                                break
+                            else:
+                                print(f"[Voice] ⚠️  Device {Config.MICROPHONE_INDEX} exists but has no input channels")
+                        except Exception as e:
+                            print(f"[Voice] ⚠️  Error validating device {Config.MICROPHONE_INDEX}: {e}")
+                
+                # If configured index not found, warn user
+                if not found_config_device:
+                    print(f"[Voice] ⚠️  Warning: Configured MICROPHONE_INDEX={Config.MICROPHONE_INDEX} not found or invalid in available devices")
+                    print(f"[Voice] 📋 Available device indices: {[idx for idx, _ in input_devices]}")
+                    if input_devices:
+                        print(f"[Voice] 💡 Suggested: Set MICROPHONE_INDEX to one of the available indices above")
+            
+            # If not set via config, prefer PulseAudio device (best for Jetson)
+            if device_index is None and pulse_device:
+                device_index = pulse_device[0]
+                device_name = pulse_device[1]
+                print(f"[Voice] Using PulseAudio device (index {device_index}): {device_name}")
+            
+            # Fallback to default device
+            if device_index is None and default_device:
+                device_index = default_device[0]
+                device_name = default_device[1]
+                print(f"[Voice] Using default device (index {device_index}): {device_name}")
+            
+            # Last resort: first available device
+            if device_index is None:
+                if input_devices:
+                    device_index = input_devices[0][0]
+                    device_name = input_devices[0][1]
+                    print(f"[Voice] Using first available device (index {device_index}): {device_name}")
+                else:
+                    # Fallback to default microphone
+                    print("[Voice] No input devices found, using default microphone")
+                    self.microphone = sr.Microphone()
+                    return
+            
+            # Create microphone with selected device (with error handling)
+            try:
+                print(f"[Voice] Attempting to create microphone with device index: {device_index}")
+                self.microphone = sr.Microphone(device_index=device_index)
+                print(f"[Voice] ✅ Selected input device: {device_name} (index {device_index})")
+            except Exception as e:
+                print(f"[Voice] ❌ Error creating microphone with device index {device_index}: {e}")
+                print(f"[Voice] Falling back to default microphone...")
+                try:
+                    self.microphone = sr.Microphone()
+                    print(f"[Voice] ✅ Using default microphone as fallback")
+                except Exception as e2:
+                    print(f"[Voice] ❌ Error creating default microphone: {e2}")
+                    self.microphone = None
+                    return
+            
+            # Adjust for ambient noise (with error handling)
+            if self.microphone:
+                try:
+                    with self.microphone as source:
+                        self.recognizer.adjust_for_ambient_noise(source, duration=1)
+                    print("[Voice] Ambient noise adjustment completed")
+                except Exception as e:
+                    print(f"[Voice] Warning: Could not adjust for ambient noise: {e}")
+                    # This is not fatal, continue initialization
             
             # Initialize pygame for audio playback
-            pygame.mixer.init(frequency=self.sample_rate, size=-16, channels=self.channels)
+            try:
+                pygame.mixer.init(frequency=self.sample_rate, size=-16, channels=self.channels)
+                print("[Voice] Audio playback initialized")
+            except Exception as e:
+                print(f"[Voice] Warning: Pygame mixer initialization failed: {e}")
             
-            print(f"[Voice] Audio initialized successfully with PulseAudio")
+            print(f"[Voice] Audio initialized successfully")
             
         except Exception as e:
             print(f"[Voice] Error initializing audio: {e}")
+            import traceback
+            traceback.print_exc()
             print("[Voice] Running in text-only mode")
     
     def set_callback(self, callback: Callable[[str], None]):
@@ -113,7 +208,7 @@ class VoiceHandler:
         if not self.audio_thread or not self.audio_thread.is_alive():
             self.audio_thread = threading.Thread(target=self._listen_loop, daemon=True)
             self.audio_thread.start()
-        print("[Voice] Voice input resumed *beep*")
+        print("[Voice] Voice input resumed")
     
     def _listen_loop(self):
         """Main listening loop for voice input."""
@@ -124,12 +219,19 @@ class VoiceHandler:
                     time.sleep(0.1)  # Wait while paused
                     continue
                 
+                # Skip capture while our own playback is active
+                if self._playback_active or time.time() < self._playback_end_time:
+                    time.sleep(0.05)
+                    continue
+                
                 if self.microphone:
                     # Use non-blocking audio capture
                     try:
                         with self.microphone as source:
                             # Very short timeout to prevent blocking
                             audio = self.recognizer.listen(source, timeout=0.05, phrase_time_limit=2)
+                            if self._playback_active or time.time() < self._playback_end_time:
+                                continue
                             if audio:
                                 # Process the audio in a separate thread to avoid blocking
                                 threading.Thread(target=self._process_audio, args=(audio,), daemon=True).start()
@@ -154,6 +256,8 @@ class VoiceHandler:
     def _process_audio(self, audio):
         """Process captured audio and convert to text."""
         try:
+            if self._playback_active or time.time() < self._playback_end_time:
+                return
             print("[Voice] Processing audio... *whirr*")
             
             # Convert speech to text
@@ -163,7 +267,7 @@ class VoiceHandler:
                 print(f"[Voice] Recognized: '{text}'")
                 
                 # For now, respond to all voice input (no wake word required)
-                print("[Voice] Voice input received! *beep*")
+                print("[Voice] Voice input received!")
                 
                 if self.callback:
                     print(f"[Voice] Sending '{text}' to conversation handler...")
@@ -215,6 +319,7 @@ class VoiceHandler:
             return
         
         self.is_speaking = True
+        self._playback_active = True
         
         try:
             print(f"[Voice] Speaking: {text}")
@@ -225,6 +330,9 @@ class VoiceHandler:
         except Exception as e:
             print(f"[Voice] Error in speech synthesis: {e}")
         finally:
+            self._playback_active = False
+            cooldown = max(0.8, len(text) * 0.05)
+            self._playback_end_time = time.time() + cooldown
             self.is_speaking = False
     
     def _simulate_speech(self, text: str):
@@ -336,7 +444,7 @@ class VoiceHandler:
                 except Exception as e:
                     print(f"[Voice] Error cleaning up temp file: {e}")
             
-            print(f"[Voice] Speech generated and played successfully! *beep*")
+            print(f"[Voice] Speech generated and played successfully!")
             
         except Exception as e:
             print(f"[Voice] ElevenLabs API error: {e}")
@@ -351,7 +459,7 @@ class VoiceHandler:
             # Generate a simple audio tone
             duration = len(text) * 0.1  # Rough estimate of speech duration
             
-            # Create a simple beep sound
+            # Create a simple tone
             sample_rate = 44100
             frequency = 440  # A4 note
             
