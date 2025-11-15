@@ -17,7 +17,8 @@ from config import Config
 from persona import RobotPersona
 from robot_state import RobotState
 from conversation_graph import ConversationGraph
-from voice_handler import VoiceHandler
+from voice_handler import VoiceHandler as VoiceHandlerV2
+# from voice_handler_v2 import VoiceHandlerV2
 from control import TerminalControl
 
 class RobotAssistant:
@@ -60,7 +61,7 @@ class RobotAssistant:
             self.conversation_graph = ConversationGraph(self.robot_state, self.persona)
             
             print("🎤 Initializing voice handler...")
-            self.voice_handler = VoiceHandler()
+            self.voice_handler = VoiceHandlerV2()
             
             print("⌨️  Initializing terminal control...")
             self.terminal_control = TerminalControl(self.robot_state)

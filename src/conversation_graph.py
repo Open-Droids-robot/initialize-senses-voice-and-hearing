@@ -88,7 +88,7 @@ class ConversationGraph:
             
             user_input = state.get("user_input", "")
             robot_response = ""
-            context = ""
+            context = self.robot_state.current_context or ""
             processing_time = 0.0
             should_continue = True
             
@@ -116,6 +116,7 @@ class ConversationGraph:
                     processing_time = time.time() - start_time
                 
                 context = f"User asked about: {user_input[:50]}..."
+                self.robot_state.set_context(context)
             else:
                     robot_response = self.persona.get_response("confused")
                 
@@ -207,6 +208,7 @@ class ConversationGraph:
             new_robot_response = ""
             new_context = ""
             new_processing_time = 0.0
+            self.robot_state.update_activity(ActivityStatus.LISTENING)
             
         except Exception as e:
             error = f"Error in speak node: {e}"
