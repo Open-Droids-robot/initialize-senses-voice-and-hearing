@@ -17,8 +17,8 @@ from config import Config
 from persona import RobotPersona
 from robot_state import RobotState
 from conversation_graph import ConversationGraph
-from voice_handler import VoiceHandler as VoiceHandlerV2
-# from voice_handler_v2 import VoiceHandlerV2
+# from voice_handler import VoiceHandler as VoiceHandlerV2
+from voice_handler_v2 import VoiceHandlerV2
 from control import TerminalControl
 
 class RobotAssistant:
@@ -31,6 +31,9 @@ class RobotAssistant:
         self.voice_handler = None
         self.terminal_control = None
         self.is_running = False
+        self._conversation_in_progress = False
+        self._pending_text = None
+        self._last_recognition_time = 0.0
         
         # Signal handlers
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -174,15 +177,44 @@ class RobotAssistant:
     
     def _on_speech_recognized(self, text: str):
         """Callback for when speech is recognized."""
+        import time
+        current_time = time.time()
+        
+        # If a conversation is in progress, queue this text or ignore if too soon
+        if self._conversation_in_progress:
+            # If recognition happened within 2 seconds of last one, it's likely part of same speech
+            if current_time - self._last_recognition_time < 2.0:
+                # Combine with pending text or update pending
+                if self._pending_text:
+                    self._pending_text = f"{self._pending_text} {text}"
+                else:
+                    self._pending_text = text
+                return
+            # Otherwise, queue it for later processing
+            self._pending_text = text
+            return
+        
+        # Mark conversation as in progress
+        self._conversation_in_progress = True
+        self._last_recognition_time = current_time
+        
         try:
-            print(f"\n🎤 Speech recognized: '{text}'")
-            
             # Run conversation workflow
             asyncio.run(self.conversation_graph.run_conversation(text))
-            
         except Exception as e:
             print(f"❌ Error processing speech: {e}")
             self.robot_state.mark_interaction_failure(f"Speech processing error: {e}")
+        finally:
+            # Mark conversation as complete
+            self._conversation_in_progress = False
+            
+            # Process any pending text after a short delay
+            if self._pending_text:
+                pending = self._pending_text
+                self._pending_text = None
+                # Wait a bit before processing pending to avoid immediate re-trigger
+                time.sleep(0.5)
+                self._on_speech_recognized(pending)
     
     def _test_conversation(self):
         """Test the conversation workflow."""

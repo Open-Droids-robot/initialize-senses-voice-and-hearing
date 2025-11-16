@@ -22,9 +22,10 @@ class VoiceHandlerV2:
 
     FRAME_MS = 30
     MIN_SPEECH_MS = 300
-    END_SILENCE_MS = 800
+    END_SILENCE_MS = int(os.getenv('END_SILENCE_MS', '400'))  # Configurable silence duration before processing (ms)
     MAX_RECORDING_MS = 15000
     BASE_THRESHOLD = 120.0
+    POST_PROCESSING_COOLDOWN_MS = 1000  # Cooldown after processing audio to prevent immediate re-triggering
 
     def __init__(self):
         self.callback: Optional[Callable[[str], None]] = None
@@ -44,6 +45,8 @@ class VoiceHandlerV2:
 
         self._playback_active = False
         self._playback_end_time = 0.0
+        self._last_processing_time = 0.0  # Track when we last processed audio
+        self._last_callback_time = 0.0  # Track when we last called the callback
 
         self._elevenlabs_client = None
         self._voice_id = None
@@ -164,10 +167,17 @@ class VoiceHandlerV2:
     # ------------------------------------------------------------------ capture loop
     def _listen_loop(self):
         frame_bytes = int(self.sample_rate * self.FRAME_MS / 1000) * self.channels * 2
-        threshold = max(self.BASE_THRESHOLD, self.noise_floor * 1.8)
+        # Use a higher threshold multiplier to reduce false positives from background noise
+        threshold = max(self.BASE_THRESHOLD, self.noise_floor * 2.5)
 
         while not self._stop_event.is_set():
             if self._should_block_listening():
+                time.sleep(0.05)
+                continue
+
+            # Cooldown period after processing audio to prevent immediate re-triggering
+            time_since_last_processing = (time.time() * 1000) - (self._last_processing_time * 1000)
+            if time_since_last_processing < self.POST_PROCESSING_COOLDOWN_MS:
                 time.sleep(0.05)
                 continue
 
@@ -208,6 +218,7 @@ class VoiceHandlerV2:
 
                 if buffer:
                     audio_data = sr.AudioData(bytes(buffer), self.sample_rate, 2)
+                    self._last_processing_time = time.time()  # Mark when we start processing
                     threading.Thread(
                         target=self._process_audio,
                         args=(audio_data,),
@@ -217,10 +228,17 @@ class VoiceHandlerV2:
     def _process_audio(self, audio: sr.AudioData):
         if self._should_block_listening():
             return
+        
+        # Debounce: Don't process if we just called the callback recently (within 1 second)
+        current_time = time.time()
+        if current_time - self._last_callback_time < 1.0:
+            return
+        
         try:
             text = self.recognizer.recognize_google(audio)
             if text and self.callback:
                 print(f"[VoiceV2] Recognized: {text}")
+                self._last_callback_time = current_time
                 self.callback(text)
         except sr.UnknownValueError:
             print("[VoiceV2] Could not understand audio")

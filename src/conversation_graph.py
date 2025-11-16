@@ -84,8 +84,6 @@ class ConversationGraph:
             self.robot_state.update_activity(ActivityStatus.THINKING)
             self.robot_state.update_emotional_state(EmotionalState.HELPFUL)
             
-            print(f"[{self.persona.name}] Processing request...")
-            
             user_input = state.get("user_input", "")
             robot_response = ""
             context = self.robot_state.current_context or ""
@@ -95,9 +93,7 @@ class ConversationGraph:
             if user_input:
                 # Check if we should use real API or fallback responses
                 if self._should_use_real_api():
-                    print(f"[{self.persona.name}] Using AI brain for response...")
                     robot_response, processing_time = await self._generate_real_response(user_input, context)
-                    print(f"[{self.persona.name}] AI Response generated: '{robot_response}'")
                 else:
                     # Use fallback responses
                     if "hello" in user_input.lower() or "hi" in user_input.lower():
@@ -143,11 +139,10 @@ class ConversationGraph:
         try:
             self.robot_state.update_activity(ActivityStatus.THINKING)
             
-            # Debug: Check what we received
-            print(f"[{self.persona.name}] Respond node - State keys: {list(state.keys())}")
-            print(f"[{self.persona.name}] Respond node - robot_response: '{state.get('robot_response', 'NOT_FOUND')}'")
-            
-            print(f"[{self.persona.name}] Response ready: {state['robot_response']}")
+            # Display context if available
+            context = state.get("context", "")
+            if context:
+                print(f"[{self.persona.name}] Context: {context}")
             
         except Exception as e:
             state["error"] = f"Error in respond node: {e}"
@@ -161,23 +156,14 @@ class ConversationGraph:
         try:
             self.robot_state.update_activity(ActivityStatus.SPEAKING)
             
-            # Debug: Check what we received
-            print(f"[{self.persona.name}] Speak node - State keys: {list(state.keys())}")
-            print(f"[{self.persona.name}] Speak node - robot_response: '{state.get('robot_response', 'NOT_FOUND')}'")
-            
-            print(f"[{self.persona.name}] Speaking: {state['robot_response']}")
-            print(f"🤖 {state['robot_response']}")
-            
             # ACTUALLY SPEAK THE RESPONSE!
             if state.get("robot_response"):
-                print(f"[{self.persona.name}] Triggering voice output...")
+                print(f"🤖 {state['robot_response']}")
                 try:
                     # Get the voice handler from robot state and speak the response
                     if hasattr(self.robot_state, 'voice_handler') and self.robot_state.voice_handler:
-                        print(f"[{self.persona.name}] Calling voice handler to speak...")
                         self.robot_state.voice_handler.speak_text(state["robot_response"])
                     else:
-                        print(f"[{self.persona.name}] No voice handler available, using fallback...")
                         # Fallback: just wait a bit to simulate speech
                         import time
                         time.sleep(len(state["robot_response"]) * 0.05)
@@ -312,14 +298,9 @@ class ConversationGraph:
             import openai
             from config import Config
             
-            print(f"[{self.persona.name}] _generate_real_response called with: '{user_input}'")
-            
             # Check if OpenAI API key is configured
             if not Config.OPENAI_API_KEY or Config.OPENAI_API_KEY == "your_openai_api_key_here":
-                print(f"[{self.persona.name}] No valid OpenAI API key found")
                 return "I'd love to give you a smart response, but my AI brain isn't connected yet. Please check your OpenAI API key configuration.", 0.1
-            
-            print(f"[{self.persona.name}] OpenAI API key found, configuring client...")
             
             # Configure OpenAI client
             client = openai.OpenAI(api_key=Config.OPENAI_API_KEY)
@@ -332,15 +313,20 @@ class ConversationGraph:
             if not history_snippet:
                 history_snippet = "No previous conversation. This is the first turn."
             
+            persona_name = self.persona.name
             user_prompt = (
                 f"Recent conversation:\n{history_snippet}\n\n"
                 f"Current user message: {user_input}\nContext: {context}\n\n"
-                f"Respond as {self.persona.name}, following the mission described in the system message. "
-                "Keep responses under 70 words, only discuss Open Droids/open source if the user asks, "
-                "and do NOT prefix the response with your name or any speaker label."
+                f"CRITICAL: You are {persona_name}. Stay in character as {persona_name} with the personality traits described in the system message. "
+                f"Do NOT use generic phrases like 'friendly neighborhood assistant' - you are {persona_name}, a specific robot persona. "
+                f"Keep responses under 70 words, only discuss Open Droids/open source if the user asks, "
+                f"and do NOT prefix the response with your name or any speaker label. Respond naturally as {persona_name} would."
             )
             
-            print(f"[{self.persona.name}] Making OpenAI API call...")
+            if Config.DEV_MODE:
+                print(f"[{self.persona.name}] Making OpenAI API call...")
+                print(f"[{self.persona.name}] System prompt preview: {system_prompt[:200]}...")
+                print(f"[{self.persona.name}] User prompt preview: {user_prompt[:200]}...")
             
             use_web = getattr(Config, "ENABLE_WEB_SEARCH", False)
             
@@ -372,8 +358,6 @@ class ConversationGraph:
                 )
                 ai_response = response.choices[0].message.content.strip()
                 processing_time = response.usage.total_tokens / 1000  # Rough time estimate
-            
-            print(f"[{self.persona.name}] OpenAI API response received: '{ai_response}'")
             
             return ai_response, processing_time
             
@@ -409,14 +393,9 @@ class ConversationGraph:
     def _should_use_real_api(self) -> bool:
         """Check if we should use real API or mock responses."""
         from config import Config
-        result = (Config.OPENAI_API_KEY and 
+        return (Config.OPENAI_API_KEY and 
                 Config.OPENAI_API_KEY != "your_openai_api_key_here" and
                 not Config.DEV_MODE)  # DEV_MODE is already a boolean
-        print(f"[{self.persona.name}] _should_use_real_api: {result}")
-        print(f"[{self.persona.name}]   - OPENAI_API_KEY: {bool(Config.OPENAI_API_KEY)}")
-        print(f"[{self.persona.name}]   - Not default: {Config.OPENAI_API_KEY != 'your_openai_api_key_here'}")
-        print(f"[{self.persona.name}]   - DEV_MODE: {Config.DEV_MODE}")
-        return result
     
     async def run_conversation(self, initial_input: str = None) -> None:
         """Run the conversation workflow."""
@@ -431,16 +410,15 @@ class ConversationGraph:
                 "should_continue": True
             }
             
-            print(f"[{self.persona.name}] Starting conversation workflow...")
-            print(f"[{self.persona.name}] Initial state: {state_dict}")
-            
             # Run the graph without checkpoint configuration for now
             async for event in self.graph.astream(state_dict):
-                print(f"[{self.persona.name}] Graph event: {event}")
-                if hasattr(event, 'node'):
-                    print(f"[{self.persona.name}] Executing node: {event.node}")
-                if hasattr(event, 'data'):
-                    print(f"[{self.persona.name}] Node data: {event.data}")
+                # Graph events are processed silently unless in DEV_MODE
+                if Config.DEV_MODE:
+                    print(f"[{self.persona.name}] Graph event: {event}")
+                    if hasattr(event, 'node'):
+                        print(f"[{self.persona.name}] Executing node: {event.node}")
+                    if hasattr(event, 'data'):
+                        print(f"[{self.persona.name}] Node data: {event.data}")
                 
         except Exception as e:
             print(f"[{self.persona.name}] Error running conversation: {e}")
